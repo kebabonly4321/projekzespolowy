@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rejestracja</title>
+  <style>
+    body{
+      font-family: Arial, sans-serif;
+      background-color: #6BCBFF;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .kontener{
+      background: #FFFFFF;
+      text-align: center;
+      border-radius: 12px;
+      width: 280px;
+      padding: 25px;
+    }
+    h2{
+      margin-bottom: 40px;
+      color: #444;
+    }
+    .pole{
+      text-align: left;
+      margin-bottom: 20px;
+    }
+    input{
+      width: 100%;
+      padding: 7px;
+      margin-top: 3px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+
+    }
+    label{
+      font-weight: bold;
+      color: #444;
+      display: block;
+    }
+    button{
+      width: 100%;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      background-color: #5C8AFF;
+      font-weight: bold;
+      padding: 10px;
+      color: #FFFFFF;
+      margin-top: 10px;
+    }
+    button:hover{
+      background-color: #4A74D6;
+    }
+    .link{
+      margin-top: 15px;
+      color: #444;
+      font-size: 14px;
+    }
+    .link a{
+      color: #5C8AFF;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .link a:hover{
+      text-decoration: underline;
+    }
+    .obrazek{
+      width: 480px;
+    }
+    .uklad{
+      gap: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="uklad">
+    <img src="{{ url_for('static', filename='images/s1.png') }}" alt="s1" class="obrazek">
+    <div class="kontener">
+      <h2>Rejestracja</h2>
+      <form action="#" method="post">
+        <div class="pole">
+          <label for="email">Adres e-mail:</label>
+          <input type="email" id="email" name="email" placeholder="Podaj adres e-mail" required>
+        </div>
+        <div class="pole">
+          <label for="haslo">Hasło:</label>
+          <input type="password" id="haslo" name="haslo" placeholder="Podaj hasło" required>
+        </div>
+        <div class="pole">
+          <label for="haslo_rep">Powtórz hasło:</label>
+          <input type="password" id="haslo_rep" name="haslo_rep" placeholder="Podaj hasło ponownie" required>
+        </div>
+        <div class="pole">
+          <label for="waga">Waga:</label>
+          <input type="password" id="waga" name="waga" placeholder="Podaj swoją wagę" required>
+        </div>
+        <div class="pole">
+          <label for="wzrost">Wzrost:</label>
+          <input type="number" id="wzrost" name="wzrost" placeholder="Podaj swój wzrost" required>
+        </div>
+        <button type="submit">Zarejestruj się</button>
+        <div class="link">
+            <p>Masz już konto? <a href="/"> Zaloguj się</a></p>
+        </div>
+      </form>
+    </div>
+    <img src="{{ url_for('static', filename='images/s2.png') }}" alt="s2" class="obrazek">
+  </div>
+  
+</body>
+</html>
