@@ -86,6 +86,15 @@
     <img src="{{ url_for('static', filename='images/s1.png') }}" alt="s1" class="obrazek">
     <div class="kontener">
       <h2>Logowanie</h2>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
       <form action="#" method="post">
         <div class="pole">
           <label for="email">Adres e-mail:</label>
