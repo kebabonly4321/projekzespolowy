@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Historia</title>
+    <style>
+        body{
+          margin: 0;
+          font-family: Arial, sans-serif;
+        }
+        menu{
+          background-color: #222222;
+          padding: 0;
+        }
+        menu ul{
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          justify-content: center;
+        }
+        menu ul li{
+          margin: 0;
+        }
+        menu ul li a{
+          display: block;
+          color: #FFFFFF;
+          padding: 15px 25px;
+          text-decoration: none;
+        }
+        menu ul li a:hover{
+          background-color: #555555;
+        }
+        .active{
+          background-color: #007BFF;
+        }
+        
+        .kontener-user{
+          position: fixed;
+          top: 65px;
+          right: 20px;
+        }
+        .ikonka{
+          background-color: #FFFFFF;
+          color: #000000;
+          padding: 12px;
+          border-radius: 12px;
+          cursor: pointer;
+          text-align: center;
+          display: inline-block;
+          font-size: 30px;
+        }
+        .lista{
+          display: none;
+          position: absolute;
+          right: 0px;
+          top: 100%;
+          padding-top: 10px;
+        }
+        .lista::before{
+          content:"";
+          position: absolute;
+          top: 0px;
+          left: 0px;
+          right: 0px;
+          height: 12px;
+        }
+        .lista-zawartosc{
+          background-color: #222222;
+          border-radius: 8px;
+          overflow: hidden;
+          min-width: 150px;
+        }
+        .lista-zawartosc a{
+          display:block;
+          padding: 10px 15px;
+          color: #FFFFFF;
+          text-decoration: none;
+        }
+        .lista-zawartosc a:hover{
+          background-color: #555555;
+          
+        }
+        .kontener-user:hover .lista{
+          display: block;
+        }
+        
+        
+    </style>
+</head>
+<body>
+  <menu>
+    <ul>
+      <li><a href="/homepage">Strona główna</a></li>
+      <li><a href="/historia" class="active">Historia treningów</a></li>
+      <li><a href="/cwiczenia">Ćwiczenia</a></li>
+      <li><a href="/trening">Dodaj trening</a></li>
+    </ul>
+  </menu>
+  <div class="kontener-user">
+    <div class="ikonka">👤</div>
+      <div class="lista">
+        <div class="lista-zawartosc">
+          <a href="/profil">Profil</a>
+          <a href="/logout">Wyloguj się</a>
+        </div>
+      </div>
+  </div>
+
+</body>
+</html>

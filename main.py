@@ -105,6 +105,21 @@ def register():
 
     return render_template("rejestracja.html")
 
+@app.route("/homepage", methods=["GET", "POST"])
+def homepage():
+    return render_template("homepage.html")
+
+@app.route("/historia", methods=["GET", "POST"])
+def historia():
+    return render_template("historia.html")
+
+@app.route("/cwiczenia", methods=["GET", "POST"])
+def cwiczenia():
+    return render_template("cwiczenia.html")
+
+@app.route("/trening", methods=["GET", "POST"])
+def dodaj_trening():
+    return render_template("dodajtrening.html")
 
 if __name__ == "__main__":
     app.run(debug=True)
