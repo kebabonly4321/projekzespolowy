@@ -84,6 +84,69 @@
         .kontener-user:hover .lista{
           display: block;
         }
+        .main{
+          margin-top: 50px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          align-items: center;
+        }
+        .trening{
+          width: 400px;
+          background-color: #f5f5f5;
+          padding: 20px;
+          border-radius: 12px;
+          text-align: center;
+        }
+        .trening h2{
+          margin-bottom: 15px;
+        }
+        .btn{
+          display: inline-block;
+          margin-top: 10px;
+          padding: 10px 15px;
+          background-color: #007BFF;
+          color: #FFFFFF;
+          text-decoration: none;
+          border-radius: 8px;
+        }
+        .btn:hover{
+          background-color: #0056B3;
+        }
+
+        .pojedyncze-cwiczenie img{
+          width: 100%;
+          max-width: 200px;
+          border-radius: 8px;
+          margin-top: 10px;
+        }
+        .odznaka-box{
+          width: 400px;
+          background-color: #f5f5f5;
+          padding: 20px;
+          border-radius: 12px;
+          text-align: center;
+          margin-top: 20px;
+        }
+
+        .odznaka{
+          width: 150px;
+          height: auto;
+          transition: 0.3s;
+        }
+        .odznaka.wyszarzona{
+          filter: grayscale(100%);
+          opacity: 0.4;
+        }
+        .odznaka.bronze{
+          filter: sepia(1) saturate(3) hue-rotate(20deg);
+        }
+        .odznaka.silver{
+          filter: brightness(1.2);
+        }
+        .odznaka.gold{
+          filter: drop-shadow(0 0 5px gold);
+        }
 
 
     </style>
@@ -105,6 +168,43 @@
           <a href="/logout">Wyloguj się</a>
         </div>
       </div>
+  </div>
+  <div class="main">
+    <div class="trening">
+      <h2>Ostatnie treningi</h2>
+      {% if last_trainings %}
+        {% for trening in last_trainings %}
+            <div class="pojedynczy-trening">
+                <p><strong>{{ trening.name }}</strong></p>
+                <p>{{ trening.date.strftime('%Y-%m-%d') }}</p>
+            </div>
+            <hr>
+        {% endfor %}
+      {% else %}
+        <div class="brak-treningu">
+              <p>Nie masz jeszcze żadnych treningów</p>
+              <a href="/cwiczenia" class="btn">
+                  Dodaj swój pierwszy trening
+              </a>
+          </div>
+      {% endif %}
+    </div>
+    <div class="trening">
+      <h2>Ostatnie ćwiczenie</h2>
+      {% if last_exercise %}
+      <div class="pojedyncze-cwiczenie">
+        <p><strong>{{ last_exercise.name }}</strong></p>
+        <img src="{{ last_exercise.image_url }}" alt="partia ciała">
+      </div>
+      {% else %}
+        <p>Nie masz jeszcze żadnych ćwiczeń</p>
+        <a href="/cwiczenia" class="btn">Dodaj pierwsze ćwiczenie</a>
+      {% endif %}
+    </div>
+    <div class="odznaka-box">
+      <h2>Twoja odznaka</h2>
+      <img src="/static/odznaka.png" class="odznaka {{ badge_level }}" alt="odznaka">
+    </div>
   </div>
 
 </body>
