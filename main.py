@@ -517,6 +517,13 @@ def logout():
     flash("Zostałeś wylogowany.", "success")
     return redirect(url_for("login"))
 
+@app.route("/zmiana_hasla")
+def zmiana_hasla():
+    return redirect(url_for("profil"))
+
+@app.route("/edytuj_profil")
+def edytuj_profil():
+    return redirect(url_for("profil"))
 
 ensure_database_exists()
 
