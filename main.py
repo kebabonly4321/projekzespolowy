@@ -385,11 +385,15 @@ def homepage():
     user_id = session["user_id"]
     workout_count = get_user_workout_count(user_id)
 
+    #PRZYKLAD - tutaj Janek musi policzyć kilogramy z bazy
+    user_points = 4000
+
     context = {
         "username": session.get("username"),
         "last_trainings": get_last_trainings(user_id),
         "has_any_training": workout_count > 0,
         "last_exercise": get_last_exercise(user_id),
+        "user_points": user_points
     }
     return render_template("homepage.html", **context)
 
@@ -507,7 +511,19 @@ def profil():
         "SELECT username, waga, wzrost FROM users WHERE id = ?",
         (session["user_id"],),
     ).fetchone()
-    return render_template("profil.html", user=user)
+
+    #PRZYKŁAD, tutaj pod points wrzuć Janek kilogramy z bazy wszystkie
+    points = 30000
+    badges = []
+    if points >= 5000:
+        badges.append("bronze")
+    if points >= 10000:
+        badges.append("silver")
+    if points >= 20000:
+        badges.append("gold")
+    if points >= 40000:
+        badges.append("red")
+    return render_template("profil.html", user=user, badges=badges)
 
 
 @app.route("/logout")

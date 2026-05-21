@@ -134,24 +134,22 @@
           height: auto;
           transition: 0.3s;
         }
-        .odznaka.wyszarzona{
-          filter: grayscale(100%);
-          opacity: 0.4;
-        }
-        .odznaka.bronze{
-          filter: sepia(1) saturate(3) hue-rotate(20deg);
-        }
-        .odznaka.silver{
-          filter: brightness(1.2);
-        }
-        .odznaka.gold{
-          filter: drop-shadow(0 0 5px gold);
-        }
-
 
     </style>
 </head>
 <body>
+    {% set points = user_points|default(0) %}
+    {% if points >= 40000 %}
+        {% set badge_img = "/static/images/odznaka_red.png" %}
+    {% elif points >= 20000 %}
+        {% set badge_img = "/static/images/odznaka_gold.png" %}
+    {% elif points >= 10000 %}
+        {% set badge_img = "/static/images/odznaka_silver.png" %}
+    {% elif points >= 5000 %}
+        {% set badge_img = "/static/images/odznaka_bronze.png" %}
+    {% else %}
+        {% set badge_img = "/static/images/odznaka.png" %}
+    {% endif %}
   <menu>
     <ul>
       <li><a href="/homepage" class="active">Strona główna</a></li>
@@ -203,7 +201,7 @@
     </div>
     <div class="odznaka-box">
       <h2>Twoja odznaka</h2>
-      <img src="/static/images/odznaka.png" class="odznaka {{ badge_level }}" alt="odznaka">
+      <img src="{{ badge_img }}" class="odznaka" alt="odznaka">
     </div>
   </div>
 
