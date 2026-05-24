@@ -1,6 +1,7 @@
 import os
+import re
 import sqlite3
-from datetime import date, datetime
+from datetime import datetime
 from functools import wraps
 
 from flask import (
@@ -21,10 +22,10 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-change-me")
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 app.config["DATABASE"] = os.path.join(BASE_DIR, "gym.db")
 app.config["SCHEMA"] = os.path.join(BASE_DIR, "database", "schemat.sql")
+app.config["EXERCISES"] = os.path.join(BASE_DIR, "database", "przykladowe_cwiczenia.sql")
 
 
 def normalize_sql_date(value):
-    """Zwraca datę jako tekst YYYY-MM-DD do zapisu w SQLite."""
     if not value:
         return datetime.now().strftime("%Y-%m-%d")
 
@@ -42,12 +43,6 @@ def normalize_sql_date(value):
 
 
 def parse_sql_date(value):
-    """
-    Zwraca obiekt date dla template'ów.
-    Dzięki temu w HTML może zostać:
-        trening.date.strftime('%Y-%m-%d')
-    i nie pojawi się błąd: 'str object' has no attribute 'strftime'.
-    """
     if not value:
         return datetime.now().date()
 
@@ -65,6 +60,42 @@ def parse_sql_date(value):
 
     return datetime.now().date()
 
+
+BADGE_LEVELS = [
+    {
+        "key": "bronze",
+        "name": "Brązowa odznaka",
+        "threshold": 5000,
+        "image": "odznaka_bronze.png",
+    },
+    {
+        "key": "silver",
+        "name": "Srebrna odznaka",
+        "threshold": 10000,
+        "image": "odznaka_silver.png",
+    },
+    {
+        "key": "gold",
+        "name": "Złota odznaka",
+        "threshold": 20000,
+        "image": "odznaka_gold.png",
+    },
+    {
+        "key": "red",
+        "name": "Czerwona odznaka",
+        "threshold": 40000,
+        "image": "odznaka_red.png",
+    },
+]
+
+
+def format_kg(value):
+    value = float(value or 0)
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.1f}".replace(".", ",")
+
+
 MUSCLE_IMAGE_FILES = {
     "klatka piersiowa": "klatka_piersiowa.png",
     "plecy": "plecy.png",
@@ -73,6 +104,28 @@ MUSCLE_IMAGE_FILES = {
     "biceps": "biceps.png",
     "triceps": "triceps.png",
 }
+
+
+def seed_exercises(conn):
+    #Dodaje katalog ćwiczeń z database/przykladowe_cwiczenia.sql.
+    with open(app.config["EXERCISES"], "r", encoding="utf-8") as f:
+        exercises_sql = f.read()
+
+    for exercise_name, muscle_group_id in re.findall(r"\('([^']+)',\s*(\d+)\)", exercises_sql):
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM cwiczenia
+            WHERE lower(name) = lower(?) AND muscle_group_id = ?
+            """,
+            (exercise_name, int(muscle_group_id)),
+        ).fetchone()
+
+        if existing is None:
+            conn.execute(
+                "INSERT INTO cwiczenia (name, muscle_group_id) VALUES (?, ?)",
+                (exercise_name, int(muscle_group_id)),
+            )
 
 
 def get_db():
@@ -91,7 +144,7 @@ def close_db(error=None):
 
 
 def ensure_database_exists():
-    """Tworzy tabele i podstawowy katalog ćwiczeń, jeżeli baza jest pusta."""
+    #Tworzy tabele i podstawowy katalog ćwiczeń, jeżeli baza jest pusta.
     os.makedirs(os.path.dirname(app.config["DATABASE"]), exist_ok=True)
     with sqlite3.connect(app.config["DATABASE"]) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
@@ -111,25 +164,7 @@ def ensure_database_exists():
                     (group_name,),
                 )
 
-        exercise_count = conn.execute("SELECT COUNT(*) FROM cwiczenia").fetchone()[0]
-        if exercise_count == 0:
-            default_exercises = [
-                ("bench press", "klatka piersiowa"),
-                ("deadlift", "plecy"),
-                ("squat", "nogi"),
-                ("shoulder press", "barki"),
-                ("barbell curl", "biceps"),
-                ("triceps pushdown", "triceps"),
-            ]
-            for exercise_name, group_name in default_exercises:
-                group_id = conn.execute(
-                    "SELECT id FROM grupa_miesniowa WHERE name = ?",
-                    (group_name,),
-                ).fetchone()[0]
-                conn.execute(
-                    "INSERT INTO cwiczenia (name, muscle_group_id) VALUES (?, ?)",
-                    (exercise_name, group_id),
-                )
+        seed_exercises(conn)
 
         conn.commit()
 
@@ -208,22 +243,49 @@ def get_user_trainings(user_id):
             t.data,
             t.trwanie_treningu,
             t.spalone_kalorie,
-            COUNT(cnt.id) AS exercise_count
+            cnt.id AS workout_exercise_id,
+            cnt.rep_count,
+            cnt.weight,
+            c.name AS exercise_name,
+            gm.name AS muscle_group_name
         FROM treningi AS t
         LEFT JOIN cwiczenia_na_treningu AS cnt
             ON cnt.workout_id = t.id
+        LEFT JOIN cwiczenia AS c
+            ON c.id = cnt.exercise_id
+        LEFT JOIN grupa_miesniowa AS gm
+            ON gm.id = c.muscle_group_id
         WHERE t.user_id = ?
-        GROUP BY t.id
-        ORDER BY date(t.data) DESC, t.id DESC
+        ORDER BY date(t.data) DESC, t.id DESC, cnt.id ASC
         """,
         (user_id,),
     ).fetchall()
 
-    trainings = []
+    trainings_by_id = {}
     for row in rows:
-        training = dict(row)
-        training["data"] = parse_sql_date(training["data"])
-        trainings.append(training)
+        training_id = row["id"]
+        if training_id not in trainings_by_id:
+            trainings_by_id[training_id] = {
+                "id": training_id,
+                "data": parse_sql_date(row["data"]),
+                "trwanie_treningu": row["trwanie_treningu"],
+                "spalone_kalorie": row["spalone_kalorie"],
+                "exercises": [],
+            }
+
+        if row["workout_exercise_id"] is not None:
+            trainings_by_id[training_id]["exercises"].append(
+                {
+                    "name": row["exercise_name"],
+                    "muscle_group_name": row["muscle_group_name"],
+                    "rep_count": row["rep_count"],
+                    "weight": row["weight"],
+                }
+            )
+
+    trainings = list(trainings_by_id.values())
+    for training in trainings:
+        training["exercise_count"] = len(training["exercises"])
 
     return trainings
 
@@ -244,6 +306,129 @@ def get_exercise_catalog():
     ).fetchall()
 
     return [dict(row) for row in rows]
+
+
+
+def badge_image_url(image_filename):
+    return url_for("static", filename=f"images/{image_filename}")
+
+
+def make_badge(muscle_group_name, points, level, earned_on=None):
+    return {
+        "key": level["key"],
+        "name": level["name"],
+        "threshold": level["threshold"],
+        "threshold_label": format_kg(level["threshold"]),
+        "muscle_group_name": muscle_group_name,
+        "points": float(points or 0),
+        "points_label": format_kg(points),
+        "image_url": badge_image_url(level["image"]),
+        "earned_on": earned_on,
+        "title": f"{level['name']} — {muscle_group_name}",
+    }
+
+
+def get_user_muscle_group_points(user_id):
+    #Liczy kilogramy przeniesione przez użytkownika osobno dla każdej partii ciała.
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            gm.name AS muscle_group_name,
+            COALESCE(SUM(COALESCE(cnt.rep_count, 0) * COALESCE(cnt.weight, 0)), 0) AS points
+        FROM treningi AS t
+        JOIN cwiczenia_na_treningu AS cnt
+            ON cnt.workout_id = t.id
+        JOIN cwiczenia AS c
+            ON c.id = cnt.exercise_id
+        JOIN grupa_miesniowa AS gm
+            ON gm.id = c.muscle_group_id
+        WHERE t.user_id = ?
+        GROUP BY gm.id, gm.name
+        ORDER BY gm.name
+        """,
+        (user_id,),
+    ).fetchall()
+
+    return [
+        {
+            "muscle_group_name": row["muscle_group_name"],
+            "points": float(row["points"] or 0),
+            "points_label": format_kg(row["points"]),
+        }
+        for row in rows
+    ]
+
+
+def get_user_badges(user_id):
+    #Zwraca wszystkie odznaki zdobyte przez użytkownika dla poszczególnych partii ciała.
+    badges = []
+    for group_points in get_user_muscle_group_points(user_id):
+        points = group_points["points"]
+        for level in BADGE_LEVELS:
+            if points >= level["threshold"]:
+                badges.append(
+                    make_badge(
+                        group_points["muscle_group_name"],
+                        points,
+                        level,
+                    )
+                )
+
+    badges.sort(
+        key=lambda badge: (
+            badge["muscle_group_name"].lower(),
+            badge["threshold"],
+        )
+    )
+    return badges
+
+
+def get_last_badge(user_id):
+    #Zwraca ostatnią zdobytą odznakę.
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            t.id AS workout_id,
+            t.data AS workout_date,
+            cnt.id AS workout_exercise_id,
+            COALESCE(cnt.rep_count, 0) AS rep_count,
+            COALESCE(cnt.weight, 0) AS weight,
+            gm.name AS muscle_group_name
+        FROM cwiczenia_na_treningu AS cnt
+        JOIN treningi AS t
+            ON t.id = cnt.workout_id
+        JOIN cwiczenia AS c
+            ON c.id = cnt.exercise_id
+        JOIN grupa_miesniowa AS gm
+            ON gm.id = c.muscle_group_id
+        WHERE t.user_id = ?
+        ORDER BY t.id ASC, cnt.id ASC
+        """,
+        (user_id,),
+    ).fetchall()
+
+    totals_by_group = {}
+    last_badge = None
+
+    for row in rows:
+        muscle_group = row["muscle_group_name"]
+        previous_points = totals_by_group.get(muscle_group, 0.0)
+        moved_points = float(row["rep_count"] or 0) * float(row["weight"] or 0)
+        current_points = previous_points + moved_points
+        totals_by_group[muscle_group] = current_points
+
+        for level in BADGE_LEVELS:
+            if previous_points < level["threshold"] <= current_points:
+                last_badge = make_badge(
+                    muscle_group,
+                    current_points,
+                    level,
+                    parse_sql_date(row["workout_date"]),
+                )
+
+    return last_badge
 
 
 def get_last_exercise(user_id):
@@ -385,15 +570,12 @@ def homepage():
     user_id = session["user_id"]
     workout_count = get_user_workout_count(user_id)
 
-    #PRZYKLAD - tutaj Janek musi policzyć kilogramy z bazy
-    user_points = 4000
-
     context = {
         "username": session.get("username"),
         "last_trainings": get_last_trainings(user_id),
         "has_any_training": workout_count > 0,
         "last_exercise": get_last_exercise(user_id),
-        "user_points": user_points
+        "last_badge": get_last_badge(user_id),
     }
     return render_template("homepage.html", **context)
 
@@ -407,87 +589,82 @@ def historia():
     )
 
 
-@app.route("/cwiczenia", methods=["GET", "POST"])
+@app.route("/cwiczenia")
 @login_required
 def cwiczenia():
-    user_id = session["user_id"]
-    db = get_db()
-
-    if request.method == "POST":
-        workout_id = request.form.get("workout_id", type=int)
-        exercise_id = request.form.get("exercise_id", type=int)
-        rep_count = request.form.get("rep_count", type=int)
-        weight_raw = request.form.get("weight", "").strip().replace(",", ".")
-
-        if not workout_id or not exercise_id:
-            flash("Wybierz trening i ćwiczenie.", "error")
-            return redirect(url_for("cwiczenia"))
-
-        workout = db.execute(
-            "SELECT id FROM treningi WHERE id = ? AND user_id = ?",
-            (workout_id, user_id),
-        ).fetchone()
-        if workout is None:
-            flash("Wybrany trening nie należy do zalogowanego użytkownika.", "error")
-            return redirect(url_for("cwiczenia"))
-
-        exercise = db.execute(
-            "SELECT id FROM cwiczenia WHERE id = ?",
-            (exercise_id,),
-        ).fetchone()
-        if exercise is None:
-            flash("Nie znaleziono wybranego ćwiczenia.", "error")
-            return redirect(url_for("cwiczenia"))
-
-        try:
-            weight = float(weight_raw) if weight_raw else None
-        except ValueError:
-            flash("Ciężar musi być liczbą.", "error")
-            return redirect(url_for("cwiczenia"))
-
-        if rep_count is not None and rep_count <= 0:
-            flash("Liczba powtórzeń musi być większa od zera.", "error")
-            return redirect(url_for("cwiczenia"))
-
-        if weight is not None and weight < 0:
-            flash("Ciężar nie może być ujemny.", "error")
-            return redirect(url_for("cwiczenia"))
-
-        db.execute(
-            """
-            INSERT INTO cwiczenia_na_treningu
-                (workout_id, exercise_id, rep_count, weight)
-            VALUES (?, ?, ?, ?)
-            """,
-            (workout_id, exercise_id, rep_count, weight),
-        )
-        db.commit()
-
-        flash("Ćwiczenie zostało dodane do wybranego treningu.", "success")
-        return redirect(url_for("homepage"))
-
     return render_template(
         "cwiczenia.html",
         exercises=get_exercise_catalog(),
-        trainings=get_user_trainings(user_id),
     )
 
 
 @app.route("/trening", methods=["GET", "POST"])
 @login_required
 def dodaj_trening():
+    db = get_db()
+
     if request.method == "POST":
         data = normalize_sql_date(request.form.get("data"))
         trwanie_treningu = request.form.get("trwanie_treningu", type=int)
         spalone_kalorie = request.form.get("spalone_kalorie", type=int)
+        exercise_ids = request.form.getlist("exercise_id")
+        rep_counts = request.form.getlist("rep_count")
+        weights_raw = request.form.getlist("weight")
 
         if trwanie_treningu is not None and trwanie_treningu <= 0:
             flash("Czas trwania treningu musi być większy od zera.", "error")
             return redirect(url_for("dodaj_trening"))
 
-        db = get_db()
+        selected_exercises = []
+        for index, exercise_id_raw in enumerate(exercise_ids):
+            if not exercise_id_raw:
+                continue
 
-        db.execute(
+            try:
+                exercise_id = int(exercise_id_raw)
+            except ValueError:
+                flash("Wybrano nieprawidłowe ćwiczenie.", "error")
+                return redirect(url_for("dodaj_trening"))
+
+            rep_count = None
+            if index < len(rep_counts) and rep_counts[index].strip():
+                try:
+                    rep_count = int(rep_counts[index])
+                except ValueError:
+                    flash("Liczba powtórzeń musi być liczbą całkowitą.", "error")
+                    return redirect(url_for("dodaj_trening"))
+
+                if rep_count <= 0:
+                    flash("Liczba powtórzeń musi być większa od zera.", "error")
+                    return redirect(url_for("dodaj_trening"))
+
+            weight = None
+            if index < len(weights_raw) and weights_raw[index].strip():
+                try:
+                    weight = float(weights_raw[index].strip().replace(",", "."))
+                except ValueError:
+                    flash("Ciężar musi być liczbą.", "error")
+                    return redirect(url_for("dodaj_trening"))
+
+                if weight < 0:
+                    flash("Ciężar nie może być ujemny.", "error")
+                    return redirect(url_for("dodaj_trening"))
+
+            exercise = db.execute(
+                "SELECT id FROM cwiczenia WHERE id = ?",
+                (exercise_id,),
+            ).fetchone()
+            if exercise is None:
+                flash("Nie znaleziono wybranego ćwiczenia.", "error")
+                return redirect(url_for("dodaj_trening"))
+
+            selected_exercises.append((exercise_id, rep_count, weight))
+
+        if not selected_exercises:
+            flash("Dodaj co najmniej jedno ćwiczenie do treningu.", "error")
+            return redirect(url_for("dodaj_trening"))
+
+        cursor = db.execute(
             """
             INSERT INTO treningi
                 (user_id, data, trwanie_treningu, spalone_kalorie)
@@ -495,35 +672,47 @@ def dodaj_trening():
             """,
             (session["user_id"], data, trwanie_treningu, spalone_kalorie),
         )
+        workout_id = cursor.lastrowid
+
+        db.executemany(
+            """
+            INSERT INTO cwiczenia_na_treningu
+                (workout_id, exercise_id, rep_count, weight)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (workout_id, exercise_id, rep_count, weight)
+                for exercise_id, rep_count, weight in selected_exercises
+            ],
+        )
         db.commit()
 
-        flash("Trening został utworzony. Możesz teraz dodać do niego ćwiczenia.", "success")
-        return redirect(url_for("cwiczenia"))
+        flash("Trening wraz z ćwiczeniami został utworzony.", "success")
+        return redirect(url_for("homepage"))
 
-    return render_template("dodajtrening.html", today=datetime.now().strftime("%Y-%m-%d"))
+    return render_template(
+        "dodajtrening.html",
+        today=datetime.now().strftime("%Y-%m-%d"),
+        exercises=get_exercise_catalog(),
+    )
 
 
 @app.route("/profil")
 @login_required
 def profil():
     db = get_db()
+    user_id = session["user_id"]
     user = db.execute(
         "SELECT username, waga, wzrost FROM users WHERE id = ?",
-        (session["user_id"],),
+        (user_id,),
     ).fetchone()
 
-    #PRZYKŁAD, tutaj pod points wrzuć Janek kilogramy z bazy wszystkie
-    points = 30000
-    badges = []
-    if points >= 5000:
-        badges.append("bronze")
-    if points >= 10000:
-        badges.append("silver")
-    if points >= 20000:
-        badges.append("gold")
-    if points >= 40000:
-        badges.append("red")
-    return render_template("profil.html", user=user, badges=badges)
+    return render_template(
+        "profil.html",
+        user=user,
+        badges=get_user_badges(user_id),
+        muscle_group_points=get_user_muscle_group_points(user_id),
+    )
 
 
 @app.route("/logout")
