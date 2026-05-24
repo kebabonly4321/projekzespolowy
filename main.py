@@ -106,28 +106,6 @@ MUSCLE_IMAGE_FILES = {
 }
 
 
-def seed_exercises(conn):
-    #Dodaje katalog ćwiczeń z database/przykladowe_cwiczenia.sql.
-    with open(app.config["EXERCISES"], "r", encoding="utf-8") as f:
-        exercises_sql = f.read()
-
-    for exercise_name, muscle_group_id in re.findall(r"\('([^']+)',\s*(\d+)\)", exercises_sql):
-        existing = conn.execute(
-            """
-            SELECT id
-            FROM cwiczenia
-            WHERE lower(name) = lower(?) AND muscle_group_id = ?
-            """,
-            (exercise_name, int(muscle_group_id)),
-        ).fetchone()
-
-        if existing is None:
-            conn.execute(
-                "INSERT INTO cwiczenia (name, muscle_group_id) VALUES (?, ?)",
-                (exercise_name, int(muscle_group_id)),
-            )
-
-
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(app.config["DATABASE"])
@@ -141,32 +119,6 @@ def close_db(error=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
-
-
-def ensure_database_exists():
-    #Tworzy tabele i podstawowy katalog ćwiczeń, jeżeli baza jest pusta.
-    os.makedirs(os.path.dirname(app.config["DATABASE"]), exist_ok=True)
-    with sqlite3.connect(app.config["DATABASE"]) as conn:
-        conn.execute("PRAGMA foreign_keys = ON")
-        table = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
-        ).fetchone()
-
-        if table is None:
-            with open(app.config["SCHEMA"], "r", encoding="utf-8") as f:
-                conn.executescript(f.read())
-
-        group_count = conn.execute("SELECT COUNT(*) FROM grupa_miesniowa").fetchone()[0]
-        if group_count == 0:
-            for group_name in MUSCLE_IMAGE_FILES.keys():
-                conn.execute(
-                    "INSERT INTO grupa_miesniowa (name) VALUES (?)",
-                    (group_name,),
-                )
-
-        seed_exercises(conn)
-
-        conn.commit()
 
 
 def login_required(view_func):
@@ -271,21 +223,39 @@ def get_user_trainings(user_id):
                 "trwanie_treningu": row["trwanie_treningu"],
                 "spalone_kalorie": row["spalone_kalorie"],
                 "exercises": [],
+                "muscle_groups": [],
+                "_muscle_group_names": set(),
             }
 
         if row["workout_exercise_id"] is not None:
+            muscle_group_name = row["muscle_group_name"]
+            image_url = muscle_group_image_url(muscle_group_name)
+
             trainings_by_id[training_id]["exercises"].append(
                 {
                     "name": row["exercise_name"],
-                    "muscle_group_name": row["muscle_group_name"],
+                    "muscle_group_name": muscle_group_name,
+                    "muscle_group_image_url": image_url,
                     "rep_count": row["rep_count"],
                     "weight": row["weight"],
                 }
             )
 
+            if muscle_group_name:
+                normalized_group_name = muscle_group_name.strip().lower()
+                if normalized_group_name not in trainings_by_id[training_id]["_muscle_group_names"]:
+                    trainings_by_id[training_id]["_muscle_group_names"].add(normalized_group_name)
+                    trainings_by_id[training_id]["muscle_groups"].append(
+                        {
+                            "name": muscle_group_name,
+                            "image_url": image_url,
+                        }
+                    )
+
     trainings = list(trainings_by_id.values())
     for training in trainings:
         training["exercise_count"] = len(training["exercises"])
+        training.pop("_muscle_group_names", None)
 
     return trainings
 
@@ -730,7 +700,6 @@ def zmiana_hasla():
 def edytuj_profil():
     return redirect(url_for("profil"))
 
-ensure_database_exists()
 
 if __name__ == "__main__":
     app.run(debug=True)
