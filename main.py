@@ -262,6 +262,7 @@ def get_user_trainings(user_id):
 
 def get_exercise_catalog():
     db = get_db()
+
     rows = db.execute(
         """
         SELECT
@@ -275,7 +276,26 @@ def get_exercise_catalog():
         """
     ).fetchall()
 
-    return [dict(row) for row in rows]
+    grouped = {}
+
+    for row in rows:
+
+        group_name = row["muscle_group_name"]
+
+        if group_name not in grouped:
+
+            grouped[group_name] = {
+                "name": group_name,
+                "image_url": muscle_group_image_url(group_name),
+                "exercises": []
+            }
+
+        grouped[group_name]["exercises"].append({
+            "id": row["id"],
+            "name": row["name"]
+        })
+
+    return list(grouped.values())
 
 
 
@@ -564,7 +584,7 @@ def historia():
 def cwiczenia():
     return render_template(
         "cwiczenia.html",
-        exercises=get_exercise_catalog(),
+        muscle_groups=get_exercise_catalog(),
     )
 
 
