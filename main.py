@@ -131,6 +131,14 @@ def login_required(view_func):
 
     return wrapper
 
+def password_matches(saved_password, plain_password):
+    try:
+        if check_password_hash(saved_password, plain_password):
+            return True
+    except ValueError:
+        pass
+
+    return saved_password == plain_password
 
 def muscle_group_image_url(muscle_group_name):
     if not muscle_group_name:
@@ -712,12 +720,79 @@ def logout():
     flash("Zostałeś wylogowany.", "success")
     return redirect(url_for("login"))
 
-@app.route("/zmiana_hasla")
+@app.route("/zmiana_hasla", methods=["GET", "POST"])
+@login_required
 def zmiana_hasla():
+    if request.method != "POST":
+        return redirect(url_for("profil"))
+
+    stare_haslo = request.form.get("stare_haslo", "")
+    nowe_haslo = request.form.get("nowe_haslo", "")
+    powtorz_haslo = request.form.get("powtorz_haslo", "")
+
+    if nowe_haslo != powtorz_haslo:
+        flash("Źle powtórzone hasło.", "error")
+        return redirect(url_for("profil"))
+
+    db = get_db()
+    user = db.execute(
+        "SELECT password FROM users WHERE id = ?",
+        (session["user_id"],),
+    ).fetchone()
+
+    if user is None or not password_matches(user["password"], stare_haslo):
+        flash("Aktualne hasło jest nieprawidłowe.", "error")
+        return redirect(url_for("profil"))
+
+    db.execute(
+        "UPDATE users SET password = ? WHERE id = ?",
+        (generate_password_hash(nowe_haslo), session["user_id"]),
+    )
+    db.commit()
+
+    flash("Hasło zostało zmienione.", "success")
     return redirect(url_for("profil"))
 
-@app.route("/edytuj_profil")
+
+@app.route("/edytuj_profil", methods=["GET", "POST"])
+@login_required
 def edytuj_profil():
+    if request.method != "POST":
+        return redirect(url_for("profil"))
+
+    email = request.form.get("username", "").strip().lower()
+    waga_raw = request.form.get("waga", "").strip().replace(",", ".")
+    wzrost_raw = request.form.get("wzrost", "").strip().replace(",", ".")
+
+    try:
+        waga = float(waga_raw)
+        wzrost = float(wzrost_raw)
+    except ValueError:
+        flash("Waga i wzrost muszą być liczbami.", "error")
+        return redirect(url_for("profil"))
+
+    if waga <= 0 or wzrost <= 0:
+        flash("Waga i wzrost muszą być większe od zera.", "error")
+        return redirect(url_for("profil"))
+
+    db = get_db()
+    existing_user = db.execute(
+        "SELECT id FROM users WHERE username = ? AND id != ?",
+        (email, session["user_id"]),
+    ).fetchone()
+
+    if existing_user:
+        flash("Użytkownik z takim adresem e-mail już istnieje.", "error")
+        return redirect(url_for("profil"))
+
+    db.execute(
+        "UPDATE users SET username = ?, waga = ?, wzrost = ? WHERE id = ?",
+        (email, waga, wzrost, session["user_id"]),
+    )
+    db.commit()
+
+    session["username"] = email
+    flash("Dane profilu zostały zapisane.", "success")
     return redirect(url_for("profil"))
 
 
