@@ -39,4 +39,4 @@ INSERT INTO cwiczenia (name, muscle_group_id) VALUES
 ('Prostowanie ramion na wyciągu', 6),
 ('Dipy', 6),
 ('Prostowanie hantla zza głowy', 6),
-('Close grip bench press', 6),
+('Close grip bench press', 6);
