@@ -1,5 +1,4 @@
 import os
-import re
 import sqlite3
 from datetime import datetime
 from functools import wraps
@@ -164,27 +163,43 @@ def get_last_trainings(user_id, limit=3):
     db = get_db()
     rows = db.execute(
         """
+        WITH user_trainings AS (
+            SELECT
+                t.id,
+                t.data,
+                t.trwanie_treningu,
+                t.spalone_kalorie,
+                ROW_NUMBER() OVER (ORDER BY t.id ASC) AS user_training_number
+            FROM treningi AS t
+            WHERE t.user_id = ?
+        ),
+        last_trainings AS (
+            SELECT *
+            FROM user_trainings
+            ORDER BY date(data) DESC, id DESC
+            LIMIT ?
+        )
         SELECT
-            t.id,
-            t.data,
-            t.trwanie_treningu,
-            t.spalone_kalorie,
+            lt.id,
+            lt.user_training_number,
+            lt.data,
+            lt.trwanie_treningu,
+            lt.spalone_kalorie,
             COUNT(cnt.id) AS exercise_count
-        FROM treningi AS t
+        FROM last_trainings AS lt
         LEFT JOIN cwiczenia_na_treningu AS cnt
-            ON cnt.workout_id = t.id
-        WHERE t.user_id = ?
-        GROUP BY t.id
-        ORDER BY date(t.data) DESC, t.id DESC
-        LIMIT ?
+            ON cnt.workout_id = lt.id
+        GROUP BY lt.id, lt.user_training_number
+        ORDER BY date(lt.data) DESC, lt.id DESC
         """,
         (user_id, limit),
     ).fetchall()
 
     return [
         {
-            "id": row["id"],
-            "name": f"Trening #{row['id']}",
+            "id": row["user_training_number"],
+            "database_id": row["id"],
+            "name": f"Trening #{row['user_training_number']}",
             "date": parse_sql_date(row["data"]),
             "duration": row["trwanie_treningu"],
             "calories": row["spalone_kalorie"],
@@ -194,31 +209,47 @@ def get_last_trainings(user_id, limit=3):
     ]
 
 
-def get_user_trainings(user_id):
+def get_user_trainings(user_id, limit=9):
     db = get_db()
     rows = db.execute(
         """
+        WITH user_trainings AS (
+            SELECT
+                t.id,
+                t.data,
+                t.trwanie_treningu,
+                t.spalone_kalorie,
+                ROW_NUMBER() OVER (ORDER BY t.id ASC) AS user_training_number
+            FROM treningi AS t
+            WHERE t.user_id = ?
+        ),
+        last_trainings AS (
+            SELECT *
+            FROM user_trainings
+            ORDER BY date(data) DESC, id DESC
+            LIMIT ?
+        )
         SELECT
-            t.id,
-            t.data,
-            t.trwanie_treningu,
-            t.spalone_kalorie,
+            lt.id,
+            lt.user_training_number,
+            lt.data,
+            lt.trwanie_treningu,
+            lt.spalone_kalorie,
             cnt.id AS workout_exercise_id,
             cnt.rep_count,
             cnt.weight,
             c.name AS exercise_name,
             gm.name AS muscle_group_name
-        FROM treningi AS t
+        FROM last_trainings AS lt
         LEFT JOIN cwiczenia_na_treningu AS cnt
-            ON cnt.workout_id = t.id
+            ON cnt.workout_id = lt.id
         LEFT JOIN cwiczenia AS c
             ON c.id = cnt.exercise_id
         LEFT JOIN grupa_miesniowa AS gm
             ON gm.id = c.muscle_group_id
-        WHERE t.user_id = ?
-        ORDER BY date(t.data) DESC, t.id DESC, cnt.id ASC
+        ORDER BY date(lt.data) DESC, lt.id DESC, cnt.id ASC
         """,
-        (user_id,),
+        (user_id, limit),
     ).fetchall()
 
     trainings_by_id = {}
@@ -226,7 +257,8 @@ def get_user_trainings(user_id):
         training_id = row["id"]
         if training_id not in trainings_by_id:
             trainings_by_id[training_id] = {
-                "id": training_id,
+                "id": row["user_training_number"],
+                "database_id": training_id,
                 "data": parse_sql_date(row["data"]),
                 "trwanie_treningu": row["trwanie_treningu"],
                 "spalone_kalorie": row["spalone_kalorie"],
@@ -311,79 +343,66 @@ def badge_image_url(image_filename):
     return url_for("static", filename=f"images/{image_filename}")
 
 
-def make_badge(muscle_group_name, points, level, earned_on=None):
+def make_badge(points, level, earned_on=None):
     return {
         "key": level["key"],
         "name": level["name"],
         "threshold": level["threshold"],
         "threshold_label": format_kg(level["threshold"]),
-        "muscle_group_name": muscle_group_name,
         "points": float(points or 0),
         "points_label": format_kg(points),
         "image_url": badge_image_url(level["image"]),
         "earned_on": earned_on,
-        "title": f"{level['name']} — {muscle_group_name}",
+        "title": level["name"],
     }
 
 
-def get_user_muscle_group_points(user_id):
-    #Liczy kilogramy przeniesione przez użytkownika osobno dla każdej partii ciała.
+def get_user_total_points(user_id):
     db = get_db()
-    rows = db.execute(
+    row = db.execute(
         """
         SELECT
-            gm.name AS muscle_group_name,
             COALESCE(SUM(COALESCE(cnt.rep_count, 0) * COALESCE(cnt.weight, 0)), 0) AS points
         FROM treningi AS t
         JOIN cwiczenia_na_treningu AS cnt
             ON cnt.workout_id = t.id
-        JOIN cwiczenia AS c
-            ON c.id = cnt.exercise_id
-        JOIN grupa_miesniowa AS gm
-            ON gm.id = c.muscle_group_id
         WHERE t.user_id = ?
-        GROUP BY gm.id, gm.name
-        ORDER BY gm.name
         """,
         (user_id,),
-    ).fetchall()
+    ).fetchone()
 
+    return float(row["points"] or 0)
+
+
+def get_user_muscle_group_points(user_id):
+    points = get_user_total_points(user_id)
     return [
         {
-            "muscle_group_name": row["muscle_group_name"],
-            "points": float(row["points"] or 0),
-            "points_label": format_kg(row["points"]),
+            "muscle_group_name": "Łącznie",
+            "points": points,
+            "points_label": format_kg(points),
         }
-        for row in rows
     ]
 
 
-def get_user_badges(user_id):
-    #Zwraca wszystkie odznaki zdobyte przez użytkownika dla poszczególnych partii ciała.
-    badges = []
-    for group_points in get_user_muscle_group_points(user_id):
-        points = group_points["points"]
-        for level in BADGE_LEVELS:
-            if points >= level["threshold"]:
-                badges.append(
-                    make_badge(
-                        group_points["muscle_group_name"],
-                        points,
-                        level,
-                    )
-                )
+def get_current_badge_level(points):
+    current_level = None
+    for level in BADGE_LEVELS:
+        if points >= level["threshold"]:
+            current_level = level
 
-    badges.sort(
-        key=lambda badge: (
-            badge["muscle_group_name"].lower(),
-            badge["threshold"],
-        )
-    )
-    return badges
+    return current_level
+
+
+def get_user_badges(user_id):
+    level = get_current_badge_level(get_user_total_points(user_id))
+    if level is None:
+        return []
+
+    return [level["key"]]
 
 
 def get_last_badge(user_id):
-    #Zwraca ostatnią zdobytą odznakę.
     db = get_db()
     rows = db.execute(
         """
@@ -392,42 +411,33 @@ def get_last_badge(user_id):
             t.data AS workout_date,
             cnt.id AS workout_exercise_id,
             COALESCE(cnt.rep_count, 0) AS rep_count,
-            COALESCE(cnt.weight, 0) AS weight,
-            gm.name AS muscle_group_name
+            COALESCE(cnt.weight, 0) AS weight
         FROM cwiczenia_na_treningu AS cnt
         JOIN treningi AS t
             ON t.id = cnt.workout_id
-        JOIN cwiczenia AS c
-            ON c.id = cnt.exercise_id
-        JOIN grupa_miesniowa AS gm
-            ON gm.id = c.muscle_group_id
         WHERE t.user_id = ?
         ORDER BY t.id ASC, cnt.id ASC
         """,
         (user_id,),
     ).fetchall()
 
-    totals_by_group = {}
+    total_points = 0.0
     last_badge = None
 
     for row in rows:
-        muscle_group = row["muscle_group_name"]
-        previous_points = totals_by_group.get(muscle_group, 0.0)
+        previous_points = total_points
         moved_points = float(row["rep_count"] or 0) * float(row["weight"] or 0)
-        current_points = previous_points + moved_points
-        totals_by_group[muscle_group] = current_points
+        total_points += moved_points
 
         for level in BADGE_LEVELS:
-            if previous_points < level["threshold"] <= current_points:
+            if previous_points < level["threshold"] <= total_points:
                 last_badge = make_badge(
-                    muscle_group,
-                    current_points,
+                    total_points,
                     level,
                     parse_sql_date(row["workout_date"]),
                 )
 
     return last_badge
-
 
 def get_last_exercise(user_id):
     db = get_db()
@@ -574,6 +584,7 @@ def homepage():
         "has_any_training": workout_count > 0,
         "last_exercise": get_last_exercise(user_id),
         "last_badge": get_last_badge(user_id),
+        "user_points": get_user_total_points(user_id),
     }
     return render_template("homepage.html", **context)
 
