@@ -256,23 +256,19 @@
     <h2>Twoje odznaki</h2>
 </div>
 
-<div class="odznaki-box">
-    {% if "bronze" in badges %}
-        <img src="/static/images/odznaka_bronze.png" class="odznaka">
-    {% endif %}
+{% set badges_order = ["bronze", "silver", "gold", "red"] %}
 
-    {% if "silver" in badges %}
-        <img src="/static/images/odznaka_silver.png" class="odznaka">
-    {% endif %}
+{% if badges %}
+    {% set current_index = badges_order.index(badges[0]) %}
 
-    {% if "gold" in badges %}
-        <img src="/static/images/odznaka_gold.png" class="odznaka">
-    {% endif %}
-
-    {% if "red" in badges %}
-        <img src="/static/images/odznaka_red.png" class="odznaka">
-    {% endif %}
-</div>
-
+    <div class="odznaki-box">
+        {% for badge in badges_order[:current_index + 1] %}
+            <img
+                src="{{ url_for('static', filename='images/odznaka_' ~ badge ~ '.png') }}"
+                class="odznaka"
+            >
+        {% endfor %}
+    </div>
+{% endif %}
 </body>
 </html>
