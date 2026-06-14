@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Progres</title>
+    <style>
+        body{
+          margin: 0;
+          font-family: Arial, sans-serif;
+        }
+        menu{
+          background-color: #222222;
+          padding: 0;
+        }
+        menu ul{
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          justify-content: center;
+        }
+        menu ul li a{
+          display: block;
+          color: #FFFFFF;
+          padding: 15px 25px;
+          text-decoration: none;
+        }
+        menu ul li a:hover{
+          background-color: #555555;
+        }
+        .active{
+          background-color: #007BFF;
+        }
+        .main{
+          margin-top: 50px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          align-items: center;
+        }
+        .box{
+          width: 420px;
+          background-color: #f5f5f5;
+          padding: 20px;
+          border-radius: 12px;
+          text-align: center;
+        }
+        .btn{
+          display: inline-block;
+          margin-top: 10px;
+          padding: 10px 15px;
+          background-color: #007BFF;
+          color: #FFFFFF;
+          text-decoration: none;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+        }
+        .btn:hover{
+          background-color: #0056B3;
+        }
+        select{
+          padding: 8px;
+          border-radius: 8px;
+          width: 100%;
+          margin-top: 10px;
+        }
+        .progress-value{
+          font-size: 28px;
+          margin-top: 15px;
+          font-weight: bold;
+        }
+        .badge{
+          margin-top: 15px;
+          width: 140px;
+          transition: 0.3s;
+        }
+    </style>
+</head>
+<body>
+<menu>
+  <ul>
+    <li><a href="/homepage">Strona główna</a></li>
+    <li><a href="/historia">Historia treningów</a></li>
+    <li><a href="/cwiczenia">Ćwiczenia</a></li>
+    <li><a href="/trening">Dodaj trening</a></li>
+    <li><a href="/progres" class="active">Progres</a></li>
+  </ul>
+</menu>
+<div class="main">
+    <div class="box">
+        <h2>Wybierz partię mięśniową</h2>
+        <form method="GET" action="/progres">
+            <select name="muscle_group" onchange="this.form.submit()">
+                <option value="">-- wybierz --</option>
+
+                {% for group in muscle_groups %}
+                    <option value="{{ group }}"
+                        {% if group == selected_group %}selected{% endif %}>
+                        {{ group }}
+                    </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    <div class="box">
+        <h2>Progres (ostatni miesiąc)</h2>
+        {% if progress_ratio is not none %}
+            <div class="progress-value">
+                {{ (progress_ratio * 100) | round(1) }}%
+            </div>
+            {% if progress_ratio < 0.5 %}
+                {% set badge_img = "/static/images/odznaka_bronze.png" %}
+            {% elif progress_ratio < 1.5 %}
+                {% set badge_img = "/static/images/odznaka_silver.png" %}
+            {% elif progress_ratio < 3.0 %}
+                {% set badge_img = "/static/images/odznaka_gold.png" %}
+            {% else %}
+                {% set badge_img = "/static/images/odznaka_red.png" %}
+            {% endif %}
+            <img src="{{ badge_img }}" class="badge" alt="odznaka">
+        {% else %}
+            <p>Brak danych dla wybranej partii mięśniowej</p>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

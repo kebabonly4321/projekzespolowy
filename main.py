@@ -806,6 +806,21 @@ def edytuj_profil():
     flash("Dane profilu zostały zapisane.", "success")
     return redirect(url_for("profil"))
 
+@app.route("/progres")
+@login_required
+def progres():
+    db = get_db()
+    muscle_groups = db.execute(
+        "SELECT DISTINCT name FROM grupa_miesniowa"
+    ).fetchall()
+    selected_group = request.args.get("muscle_group")
+    progress_ratio = 11.0/(8.0)
+    return render_template(
+        "progres.html",
+        muscle_groups=muscle_groups,
+        selected_group=selected_group,
+        progress_ratio=progress_ratio
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
