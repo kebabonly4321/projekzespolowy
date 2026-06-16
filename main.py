@@ -343,6 +343,74 @@ def badge_image_url(image_filename):
     return url_for("static", filename=f"images/{image_filename}")
 
 
+def get_muscle_group_names():
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT name
+        FROM grupa_miesniowa
+        ORDER BY name
+        """
+    ).fetchall()
+
+    return [row["name"] for row in rows]
+
+
+def get_muscle_group_progress(user_id, muscle_group_name):
+    if not muscle_group_name:
+        return None
+
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            gm.name AS partia_ciala,
+            strftime('%Y-%m', t.data) AS miesiac,
+            COALESCE(
+                SUM(COALESCE(cnt.rep_count, 0) * COALESCE(cnt.weight, 0)),
+                0
+            ) AS objetosc
+        FROM cwiczenia_na_treningu AS cnt
+        JOIN treningi AS t
+            ON t.id = cnt.workout_id
+        JOIN cwiczenia AS c
+            ON c.id = cnt.exercise_id
+        JOIN grupa_miesniowa AS gm
+            ON gm.id = c.muscle_group_id
+        WHERE t.user_id = ?
+            AND gm.name = ?
+        GROUP BY gm.name, strftime('%Y-%m', t.data)
+        ORDER BY miesiac DESC
+        LIMIT 2
+        """,
+        (user_id, muscle_group_name),
+    ).fetchall()
+
+    if len(rows) < 2:
+        return None
+
+    current_month = rows[0]
+    previous_month = rows[1]
+    current_volume = float(current_month["objetosc"] or 0)
+    previous_volume = float(previous_month["objetosc"] or 0)
+
+    if previous_volume <= 0:
+        return None
+
+    progress_ratio = current_volume / previous_volume
+
+    return {
+        "muscle_group_name": current_month["partia_ciala"],
+        "current_month": current_month["miesiac"],
+        "previous_month": previous_month["miesiac"],
+        "current_volume": current_volume,
+        "previous_volume": previous_volume,
+        "current_volume_label": format_kg(current_volume),
+        "previous_volume_label": format_kg(previous_volume),
+        "progress_ratio": progress_ratio,
+    }
+
+
 def make_badge(points, level, earned_on=None):
     return {
         "key": level["key"],
@@ -809,17 +877,16 @@ def edytuj_profil():
 @app.route("/progres")
 @login_required
 def progres():
-    db = get_db()
-    muscle_groups = db.execute(
-        "SELECT DISTINCT name FROM grupa_miesniowa"
-    ).fetchall()
-    selected_group = request.args.get("muscle_group")
-    progress_ratio = 11.0/(8.0)
+    selected_group = request.args.get("muscle_group", "").strip()
+    progress_data = get_muscle_group_progress(session["user_id"], selected_group)
+
     return render_template(
         "progres.html",
-        muscle_groups=muscle_groups,
+        muscle_groups=get_muscle_group_names(),
         selected_group=selected_group,
-        progress_ratio=progress_ratio
+        progress_ratio=(
+            progress_data["progress_ratio"] if progress_data is not None else None
+        ),
     )
 
 if __name__ == "__main__":
