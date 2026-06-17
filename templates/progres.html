@@ -106,16 +106,17 @@
     <div class="box">
         <h2>Progres (ostatni miesiąc)</h2>
         {% if progress_ratio is not none %}
+            {% set progress = (progress_ratio - 1) %}
             <div class="progress-value">
-                {{ (progress_ratio) | round(1) }}%
+                {{ (progress_ratio - 1) | round(1) }}%
             </div>
-            {% if progress_ratio < 0.0 %}
+            {% if progress < 0.0 %}
                 {% set badge_img = "/static/images/odznaka.png" %}
-            {% elif progress_ratio < 0.5 %}
+            {% elif progress < 0.5 %}
                 {% set badge_img = "/static/images/odznaka_bronze.png" %}
-            {% elif progress_ratio < 1.5 %}
+            {% elif progress < 1.5 %}
                 {% set badge_img = "/static/images/odznaka_silver.png" %}
-            {% elif progress_ratio < 2.5 %}
+            {% elif progress < 2.5 %}
                 {% set badge_img = "/static/images/odznaka_gold.png" %}
             {% else %}
                 {% set badge_img = "/static/images/odznaka_red.png" %}
