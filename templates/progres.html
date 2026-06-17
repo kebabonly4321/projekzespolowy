@@ -112,11 +112,11 @@
             </div>
             {% if progress < 0.0 %}
                 {% set badge_img = "/static/images/odznaka.png" %}
-            {% elif progress < 0.5 %}
+            {% elif progress < 0.1 %}
                 {% set badge_img = "/static/images/odznaka_bronze.png" %}
-            {% elif progress < 1.5 %}
+            {% elif progress < 0.19 %}
                 {% set badge_img = "/static/images/odznaka_silver.png" %}
-            {% elif progress < 2.5 %}
+            {% elif progress < 0.3 %}
                 {% set badge_img = "/static/images/odznaka_gold.png" %}
             {% else %}
                 {% set badge_img = "/static/images/odznaka_red.png" %}
