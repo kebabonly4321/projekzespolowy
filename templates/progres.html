@@ -108,7 +108,7 @@
         {% if progress_ratio is not none %}
             {% set progress = (progress_ratio - 1) %}
             <div class="progress-value">
-                {{ (progress_ratio - 1) | round(1) }}%
+                {{ (progress_ratio - 1) | round(1) }}
             </div>
             {% if progress < 0.0 %}
                 {% set badge_img = "/static/images/odznaka.png" %}
